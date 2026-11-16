@@ -10,7 +10,7 @@ import (
 
 type Config struct {
 	Addr         string        `env:"HTTP_ADDR" env-default:":8080"`
-	ShutdownTOut time.Duration `env:"SHUTDOWN_TIMEOUT" env-default:"5"`
+	ShutdownTOut time.Duration `env:"SHUTDOWN_TIMEOUT" env-default:"5s"`
 }
 
 func LoadConfig() (*Config, error) {
