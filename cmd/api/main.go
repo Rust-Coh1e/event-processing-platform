@@ -1,4 +1,4 @@
-package event_processing_platform
+package main
 
 import (
 	"log"
