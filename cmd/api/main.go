@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"event-processing-platform/internal/config"
@@ -18,6 +22,9 @@ func main() {
 		return
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", thttp.HealthHandler)
@@ -31,7 +38,27 @@ func main() {
 
 	log.Printf("Server starting on http://%v", cfg.Addr)
 
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("Error server start: %v", err)
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal("Error server start")
+		}
+	}()
+
+	<-ctx.Done()
+	// Получение сигнала отмены
+
+	log.Printf("Get os cancel signal. Server stoping...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTOut*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server force stopped, by: %v", err)
+
+	} else {
+		log.Printf("Server gracefully shutted down")
 	}
+
+	// Закрыть соединения с внешними системами
+
 }
