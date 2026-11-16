@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -11,20 +12,24 @@ import (
 
 func main() {
 
-	cfg := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Print(err)
+		return
+	}
 
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", thttp.HealthHandler)
 
 	server := &http.Server{
-		Addr:         ":" + cfg.Port,
+		Addr:         cfg.Addr,
 		Handler:      mux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
 
-	log.Printf("Server starting on http://localhost:%v", cfg.Port)
+	log.Printf("Server starting on http://%v", cfg.Addr)
 
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Error server start: %v", err)

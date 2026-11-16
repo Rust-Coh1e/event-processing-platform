@@ -1,30 +1,30 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type Config struct {
-	Port string `env:"HTTP_ADDR" env-default:"8080"`
+	Addr string `env:"HTTP_ADDR" env-default:"8080"`
 }
 
-func LoadConfig() *Config {
+func LoadConfig() (*Config, error) {
 	var cfg Config
 
 	if _, err := os.Stat(".env"); err == nil {
 		if err := cleanenv.ReadConfig(".env", &cfg); err != nil {
-			log.Fatalf("Err reading env-file\n")
+			return nil, fmt.Errorf("Err reading env-file\n")
 		}
-		return &cfg
+		return &cfg, nil
 	}
 
 	if err := cleanenv.ReadEnv(&cfg); err != nil {
-		log.Fatalf("Err reading env variables\n")
+		return nil, fmt.Errorf("Err reading env variables\n")
 	}
 
-	return &cfg
+	return &cfg, nil
 
 }
