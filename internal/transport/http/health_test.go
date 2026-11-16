@@ -30,13 +30,13 @@ func TestHealthHandler(t *testing.T) {
 
 	if recorder.Header().Get("Content-Type") != "application/json" {
 		t.Errorf(
-			"wrong content type %d",
-			resp.StatusCode,
+			"wrong content type %s",
+			recorder.Header().Get("Content-Type"),
 		)
 	}
 
 	var reqBody struct {
-		Status string `json:status`
+		Status string `json:"status"`
 	}
 
 	err := json.NewDecoder(resp.Body).Decode(&reqBody)

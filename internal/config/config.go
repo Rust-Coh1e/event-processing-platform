@@ -13,20 +13,22 @@ type Config struct {
 	ShutdownTOut time.Duration `env:"SHUTDOWN_TIMEOUT" env-default:"5s"`
 }
 
-func LoadConfig() (*Config, error) {
+// LoadConfig загружает конфигурацию из указанного файла (если он существует) и переменных окружения.
+func LoadConfig(envPath string) (*Config, error) {
 	var cfg Config
 
-	if _, err := os.Stat(".env"); err == nil {
-		if err := cleanenv.ReadConfig(".env", &cfg); err != nil {
-			return nil, fmt.Errorf("Err reading env-file: %w\n", err)
+	if envPath != "" {
+		if _, err := os.Stat(envPath); err == nil {
+			if err := cleanenv.ReadConfig(envPath, &cfg); err != nil {
+				return nil, fmt.Errorf("error reading env-file %q: %w", envPath, err)
+			}
+			return &cfg, nil
 		}
-		return &cfg, nil
 	}
 
 	if err := cleanenv.ReadEnv(&cfg); err != nil {
-		return nil, fmt.Errorf("Err reading env variables %w\n", err)
+		return nil, fmt.Errorf("error reading env variables: %w", err)
 	}
 
 	return &cfg, nil
-
 }

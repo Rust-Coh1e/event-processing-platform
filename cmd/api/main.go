@@ -2,9 +2,8 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -16,18 +15,18 @@ import (
 
 func main() {
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.LoadConfig(".env")
 	if err != nil {
 		fmt.Print(err)
 		return
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", thttp.HealthHandler)
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	server := &http.Server{
 		Addr:         cfg.Addr,
@@ -36,34 +35,9 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	log.Printf("Server starting on http://%v", cfg.Addr)
-
-	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("Error server start")
-			stop()
-			return
-		}
-	}()
-
-	<-ctx.Done()
-	// Получение сигнала отмены
-
-	log.Printf("Get os cancel signal. Server stoping...")
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTOut)
-	defer cancel()
-
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Graceful shutdown timed out (%v), forcing server close...", err)
-
-		// Явно принудительно разрываем все активные соединения и освобождаем сокеты
-		if closeErr := server.Close(); closeErr != nil {
-			log.Printf("Error when closing server")
-		}
-
-	} else {
-		log.Printf("Server gracefully shutted down")
+	err = runServer(ctx, server, cfg.ShutdownTOut)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Error in server: %v", err), "addr", server.Addr)
 	}
 
 	// Закрыть соединения с внешними системами
