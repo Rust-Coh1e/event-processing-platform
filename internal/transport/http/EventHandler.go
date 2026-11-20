@@ -29,37 +29,28 @@ func NewEventHandler(service EventService) EventHandler {
 // )
 
 func (event *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
-	// Здесь нужно считать json и вызвать сервис
 	defer r.Body.Close()
 
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	var req domain.EventRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	err := dec.Decode(&req)
+	req, err := domain.DecodeAndValidate[domain.EventRequest](w, r)
 	if err != nil {
-		http.Error(w, "Неверный формат JSON: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	id, err := event.service.CreateEvent(r.Context(), req)
 	if err != nil {
-		if errors.Is(err, service.ErrValidation) {
-			http.Error(w, "Неверный формат JSON: "+err.Error(), http.StatusBadRequest)
-			return
+		switch {
+		case errors.Is(err, service.ErrValidation):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(err, service.ErrEventDuplicate):
+			http.Error(w, "Already exist: "+err.Error(), http.StatusConflict)
+		default:
+			http.Error(w, "DB problems", http.StatusServiceUnavailable)
 		}
-		if errors.Is(err, service.ErrValidation) {
-			http.Error(w, "Already exist: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "DB problems", 503)
 		return
 	}
 
-	data, err := json.Marshal(map[string]int{
-		"id": id,
-	})
+	data, err := json.Marshal(map[string]int{"id": id})
 	if err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 		return
@@ -67,5 +58,5 @@ func (event *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	w.Write(data)
+	_, _ = w.Write(data)
 }

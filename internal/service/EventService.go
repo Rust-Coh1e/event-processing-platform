@@ -11,7 +11,7 @@ import (
 
 type EventRepo interface {
 	ExistsByID(ctx context.Context, event_id uuid.UUID) (bool, error)
-	Save(ctx context.Context, req domain.Event) (int, error)
+	Save(ctx context.Context, req domain.Event) (int, bool, error)
 }
 
 type EventService struct {
@@ -29,28 +29,29 @@ var (
 	ErrEventDuplicate = errors.New("event already exists")
 )
 
-func (es EventService) CreateEvent(ctx context.Context, req domain.EventRequest) (int, error) {
+func (es EventService) CreateEvent(ctx context.Context, req domain.EventRequest) (int, bool, error) {
 	// 1. Базовая валидация полей структуры
 	if err := req.Validate(); err != nil {
-		return 0, fmt.Errorf("%w: %w", ErrValidation, err)
+		return 0, false, fmt.Errorf("%w: %w", ErrValidation, err)
 	}
 
 	// 2. Бизнес-валидация (требует обращения к БД)
 	exists, err := es.repo.ExistsByID(ctx, req.EventID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to check event existence: %w", err)
+		return 0, false, fmt.Errorf("failed to check event existence: %w", err)
 	}
 	if exists {
-		return 0, ErrEventDuplicate
+		return 0, false, ErrEventDuplicate
 	}
 
 	// 3. Создание и сохранение
 	event := domain.NewEventFromRequest(req)
 	var id int
-	id, err = es.repo.Save(ctx, event)
+	var new bool
+	id, new, err = es.repo.Save(ctx, event)
 	if err != nil {
-		return 0, fmt.Errorf("failed to save event: %w", err)
+		return 0, false, fmt.Errorf("failed to save event: %w", err)
 	}
 
-	return id, nil
+	return id, new, nil
 }

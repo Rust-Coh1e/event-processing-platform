@@ -31,10 +31,15 @@ func (ER EventRepo) ExistsByID(ctx context.Context, event_id uuid.UUID) (bool, e
 
 }
 
-func (ER EventRepo) Save(ctx context.Context, req domain.Event) (int, error) {
-	query := `INSERT INTO events (event_id, device_id, event_type, occurred_at, payload, created_at)
-			  VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`
+func (ER EventRepo) Save(ctx context.Context, req domain.Event) (int, bool, error) {
+	query := `INSERT INTO events (event_id, device_id, event_type, occurred_at, payload)
+				VALUES ($1, $2, $3, $4, $5)
+				ON CONFLICT (event_id) DO UPDATE
+				SET event_id = EXCLUDED.event_id
+				RETURNING id, (xmax = 0) AS is_created`
 	var id int
+	var created bool
+
 	err := ER.pool.QueryRow(
 		ctx,
 		query,
@@ -44,10 +49,10 @@ func (ER EventRepo) Save(ctx context.Context, req domain.Event) (int, error) {
 		req.OccurredAt,
 		req.Payload,
 		req.CreatedAt,
-	).Scan(&id)
+	).Scan(&id, &created)
 
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return id, nil
+	return id, created, nil
 }

@@ -51,7 +51,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", thttp.HealthHandler)
-	mux.HandleFunc("POST /api/v1/health", eventHandler.CreateEvent)
+	mux.HandleFunc("POST /api/v1/events", eventHandler.CreateEvent)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

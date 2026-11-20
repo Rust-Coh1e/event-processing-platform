@@ -1,10 +1,15 @@
 package domain
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -37,37 +42,55 @@ func NewEventFromRequest(er EventRequest) Event {
 	}
 }
 
+type Validator interface {
+	Validate() error
+}
+
+const (
+	maxDeviceIDLen  = 128
+	maxEventTypeLen = 64
+)
+
 func (r EventRequest) Validate() error {
 	var errs []error
 
-	// 1. Проверка UUID (пустой UUID состоит из одних нулей)
+	// 1. Проверка UUID
 	if r.EventID == uuid.Nil {
 		errs = append(errs, errors.New("event_id is required"))
 	}
 
-	// 2. Проверка строковых полей (TrimSpace защищает от строк из одних пробелов)
-	if strings.TrimSpace(r.DeviceID) == "" {
+	// 2. Проверка строковых полей (обязательность + максимальная длина в символах)
+	deviceID := strings.TrimSpace(r.DeviceID)
+	if deviceID == "" {
 		errs = append(errs, errors.New("device_id is required"))
-	}
-	if strings.TrimSpace(r.EventType) == "" {
-		errs = append(errs, errors.New("event_type is required"))
+	} else if utf8.RuneCountInString(deviceID) > maxDeviceIDLen {
+		errs = append(errs, fmt.Errorf("device_id must be <= %d characters", maxDeviceIDLen))
 	}
 
-	// 3. Проверка времени (IsZero проверяет, что дата вообще была передана)
+	eventType := strings.TrimSpace(r.EventType)
+	if eventType == "" {
+		errs = append(errs, errors.New("event_type is required"))
+	} else if utf8.RuneCountInString(eventType) > maxEventTypeLen {
+		errs = append(errs, fmt.Errorf("event_type must be <= %d characters", maxEventTypeLen))
+	}
+
+	// 3. Проверка времени
 	if r.OccurredAt.IsZero() {
 		errs = append(errs, errors.New("occurred_at is required"))
 	} else if r.OccurredAt.After(time.Now().Add(5 * time.Minute)) {
 		errs = append(errs, errors.New("occurred_at cannot be in the future"))
 	}
 
-	// 4. Проверка JSON Payload
-	if len(r.Payload) == 0 || string(r.Payload) == "null" {
+	// 4. Проверка JSON Payload (только JSON-объект "{...}", не массив "[...]" и не null)
+	trimmedPayload := bytes.TrimSpace(r.Payload)
+	if len(trimmedPayload) == 0 || bytes.Equal(trimmedPayload, []byte("null")) {
 		errs = append(errs, errors.New("payload is required"))
-	} else if !json.Valid(r.Payload) {
+	} else if !json.Valid(trimmedPayload) {
 		errs = append(errs, errors.New("payload must be a valid json"))
+	} else if trimmedPayload[0] != '{' {
+		errs = append(errs, errors.New("payload must be a json object"))
 	}
 
-	// Объединяет все ошибки в одну (вернет nil, если срез errs пуст)
 	return errors.Join(errs...)
 }
 
@@ -81,3 +104,30 @@ func (r EventRequest) Validate() error {
 // --     "threshold": 90
 // --   }
 // -- }
+
+func DecodeAndValidate[T Validator](w http.ResponseWriter, r *http.Request) (T, error) {
+	var req T
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	if err := dec.Decode(&req); err != nil {
+		return req, fmt.Errorf("неверный формат JSON: %w", err)
+	}
+
+	// Защита от мусора после первого JSON-объекта (например, "{}{}" или "{} 42")
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		return req, errors.New("тело запроса должно содержать только один JSON-объект")
+	}
+
+	if err := req.Validate(); err != nil {
+		return req, err
+	}
+
+	return req, nil
+}
+
+func puk() {
+	return
+}
