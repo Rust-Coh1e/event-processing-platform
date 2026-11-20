@@ -1,10 +1,10 @@
 CREATE TABLE IF NOT EXISTS events (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL     PRIMARY KEY,
     event_id UUID NOT NULL UNIQUE,
     device_id VARCHAR(128) NOT NULL,
     event_type VARCHAR(128) NOT NULL,
     occurred_at TIMESTAMPTZ NOT NULL,
-    payload JSONB,
+    payload JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -36,7 +36,10 @@ func main() {
 	// Гарантируем закрытие соединений при выходе из main
 	defer pool.Close()
 
-	if err := pool.Ping(startCtx); err != nil {
+	pingCtx, close := context.WithTimeout(startCtx, time.Second*10)
+	defer close()
+
+	if err := pool.Ping(pingCtx); err != nil {
 		slog.Error("failed to ping db", "err", err)
 		os.Exit(1)
 	}
@@ -48,7 +51,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", thttp.HealthHandler)
-	mux.HandleFunc("POST api/v1/health", eventHandler.CreateEvent)
+	mux.HandleFunc("POST /api/v1/health", eventHandler.CreateEvent)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
