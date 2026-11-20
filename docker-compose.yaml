@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:18
+    container_name: event_db_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: strong_password
+      POSTGRES_DB: app_db
+    ports:
+      - "5455:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./init-db:/docker-entrypoint-initdb.d
+
+volumes:
+  postgres_data:

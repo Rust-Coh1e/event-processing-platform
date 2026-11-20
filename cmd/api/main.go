@@ -5,25 +5,50 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"event-processing-platform/internal/config"
+	"event-processing-platform/internal/repository/postgres"
+	"event-processing-platform/internal/service"
 	thttp "event-processing-platform/internal/transport/http"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
 
+	startCtx := context.Background()
+
 	cfg, err := config.LoadConfig(".env")
 	if err != nil {
-		fmt.Print(err)
-		return
+		slog.Error(fmt.Sprintf("Error in cfg: %v", err))
+		os.Exit(1)
 	}
+
+	pool, err := pgxpool.New(startCtx, cfg.Dsn)
+	if err != nil {
+		slog.Error("failed to create db pool", "err", err)
+		os.Exit(1)
+	}
+	// Гарантируем закрытие соединений при выходе из main
+	defer pool.Close()
+
+	if err := pool.Ping(startCtx); err != nil {
+		slog.Error("failed to ping db", "err", err)
+		os.Exit(1)
+	}
+
+	eventRepo := postgres.NewEventRepo(pool)
+	eventService := service.NewEventService(eventRepo)
+	eventHandler := thttp.NewEventHandler(eventService)
 
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", thttp.HealthHandler)
+	mux.HandleFunc("POST api/v1/health", eventHandler.CreateEvent)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

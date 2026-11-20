@@ -11,6 +11,7 @@ import (
 type Config struct {
 	Addr         string        `env:"HTTP_ADDR" env-default:":8080"`
 	ShutdownTOut time.Duration `env:"SHUTDOWN_TIMEOUT" env-default:"5s"`
+	Dsn          string        `env:"DB_CONN" env-default:"postgresql://username:password@host:port/database_name?sslmode=prefer"`
 }
 
 // LoadConfig загружает конфигурацию из указанного файла (если он существует) и переменных окружения.
