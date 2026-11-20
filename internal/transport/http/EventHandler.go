@@ -10,7 +10,7 @@ import (
 )
 
 type EventService interface {
-	CreateEvent(ctx context.Context, req domain.EventRequest) (int, error)
+	CreateEvent(ctx context.Context, req domain.EventRequest) (int, bool, error)
 }
 
 type EventHandler struct {
@@ -37,7 +37,7 @@ func (event *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := event.service.CreateEvent(r.Context(), req)
+	id, new, err := event.service.CreateEvent(r.Context(), req)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrValidation):
@@ -57,6 +57,10 @@ func (event *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	if new {
+		w.WriteHeader(http.StatusCreated)
+	} else {
+		w.WriteHeader(200)
+	}
 	_, _ = w.Write(data)
 }
